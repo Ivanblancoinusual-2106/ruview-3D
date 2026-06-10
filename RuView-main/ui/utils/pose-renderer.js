@@ -180,6 +180,17 @@ export class PoseRenderer {
     console.log(`🦴 [RENDERER] Skeleton mode: processing ${persons.length} persons`);
     
     persons.forEach((person, index) => {
+      // Compute spatial distribution if keypoints lack absolute coordinates
+      const hasAbsolute = person.keypoints && person.keypoints.every(kp => kp.x !== undefined && kp.y !== undefined);
+      let baseX = 0;
+      let baseY = 0;
+      if (!hasAbsolute) {
+        // Place on a circle around origin based on index
+        const radius = 150; // pixels from center
+        const angle = (2 * Math.PI * index) / persons.length;
+        baseX = this.canvas.width / 2 + radius * Math.cos(angle);
+        baseY = this.canvas.height / 2 + radius * Math.sin(angle);
+      }
       console.log(`👤 [RENDERER] Person ${index}:`, person);
       
       if (person.confidence < this.config.confidenceThreshold) {
@@ -189,6 +200,13 @@ export class PoseRenderer {
 
       // Apply client-side lerp smoothing to reduce visual jitter
       const smoothedKps = this._getSmoothedKeypoints(index, person.keypoints);
+      // Translate keypoints if base position set
+      if (!hasAbsolute) {
+        smoothedKps.forEach(kp => {
+          kp.x += baseX;
+          kp.y += baseY;
+        });
+      }
 
       // Render skeleton connections
       if (this.config.showSkeleton && smoothedKps) {

@@ -41,6 +41,11 @@ import numpy as np
 from v1.src.sensing.rssi_collector import (
     WifiSample,
     RingBuffer,
+    create_collector,
+    LinuxWifiCollector,
+    WindowsWifiCollector,
+    MacosWifiCollector,
+    SimulatedCollector,
 )
 from v1.src.sensing.feature_extractor import RssiFeatureExtractor, RssiFeatures
 from v1.src.sensing.classifier import MotionLevel, PresenceClassifier, SensingResult
@@ -317,22 +322,34 @@ class SensingWebSocketServer:
         self.source: str = "unknown"
         self._running = False
 
-    def _create_collector(self):
-        """Auto-detect data source: ESP32 UDP > platform WiFi > simulated.
+        # Logger for the server instance (same level as module logger)
+        self.logger = logging.getLogger(__name__)
 
-        Uses the ``create_collector`` factory (ADR-049) for platform WiFi
-        detection, which never raises and logs actionable fallback messages.
+    def _init_collector(self):
+        """Instantiate the best available WiFi collector.
+
+        The original implementation attempted to create a ``LinuxWifiCollector``
+        directly, which raised ``RuntimeError`` when running in Docker or on
+        systems without a wireless interface.  We now delegate to the new
+        ``create_collector`` factory that performs platform detection and
+        falls back to ``SimulatedCollector`` automatically.
         """
-        from .rssi_collector import create_collector
-        # Check if WiFi collection is disabled via env var
-        wifi_enabled = os.getenv("WIFI_COLLECTOR_ENABLED", "true").lower()
-        if wifi_enabled in {"false", "0", "no", "off"}:
-            logger.info(
-                "WiFi collector disabled by WIFI_COLLECTOR_ENABLED=%s; using simulated collector",
-                os.getenv("WIFI_COLLECTOR_ENABLED"),
+
+        preferred = os.getenv("WIFI_COLLECTOR", "auto")
+        interface = os.getenv("IFACE", "wlan0")
+        sample_rate_hz = float(os.getenv("SAMPLE_RATE_HZ", 10))
+
+        try:
+            self.collector = create_collector(
+                preferred=preferred,
+                interface=interface,
+                sample_rate_hz=sample_rate_hz
             )
-            # Return a simulated collector directly
-            return create_collector(preferred="simulated", sample_rate_hz=10.0)
+            self.logger.info("Using WiFi collector: %s", type(self.collector).__name__)
+        except Exception as exc:
+            # This should never happen because create_collector never raises.
+            self.logger.error("Unexpected error initializing WiFi collector: %s", exc)
+            raise
 
         # 1. Try ESP32 UDP first
         print("  Probing for ESP32 on UDP :5005 ...")
@@ -475,7 +492,8 @@ class SensingWebSocketServer:
             print("Install it with:  pip install websockets")
             sys.exit(1)
 
-        self.collector = self._create_collector()
+        # Initialize the collector using the new factory logic.
+        self.collector = self._init_collector()
         self.collector.start()
         self._running = True
 

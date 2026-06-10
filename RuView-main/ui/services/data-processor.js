@@ -69,9 +69,13 @@ export class DataProcessor {
     const persons = [];
 
     if (payload.pose && payload.pose.persons) {
-      for (const person of payload.pose.persons) {
-        const processed = {
-          id: person.id || `person_${persons.length}`,
+        for (let i = 0; i < payload.pose.persons.length; i++) {
+          const person = payload.pose.persons[i];
+          const processed = {
+            // Use provided id if present, otherwise generate a deterministic
+            // unique id based on the index in this frame. This prevents
+            // duplicate ids when the backend omits an explicit identifier.
+            id: person.id || `person_${i}`,
           confidence: person.confidence || 0,
           keypoints: this._normalizeKeypoints(person.keypoints),
           bbox: person.bbox || null,

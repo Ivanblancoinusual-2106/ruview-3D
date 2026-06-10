@@ -523,21 +523,23 @@ export class PoseService {
     }
     console.log('📍 Zone summary:', zoneSummary);
 
-    const result = {
-      timestamp: originalMessage.timestamp || new Date().toISOString(),
-      frame_id: zoneData.metadata?.frame_id || `ws_frame_${Date.now()}`,
-      persons: persons,
-      zone_summary: zoneSummary,
-      processing_time_ms: zoneData.metadata?.processing_time_ms || 0,
-      pose_source: poseSource,
-      metadata: {
-        mock_data: false,
-        source: 'websocket',
-        zone_id: zoneId,
-        confidence: zoneData.confidence,
-        activity: zoneData.activity
-      }
-    };
+      const result = {
+        timestamp: originalMessage.timestamp || new Date().toISOString(),
+        frame_id: zoneData.metadata?.frame_id || `ws_frame_${Date.now()}`,
+        persons: persons,
+        zone_summary: zoneSummary,
+        processing_time_ms: zoneData.metadata?.processing_time_ms || 0,
+        pose_source: poseSource,
+        metadata: {
+          // Preserve all original metadata fields from the WebSocket payload
+          ...zoneData.metadata,
+          mock_data: false,
+          source: 'websocket',
+          zone_id: zoneId,
+          confidence: zoneData.confidence,
+          activity: zoneData.activity
+        }
+      };
     
     console.log('✅ Final converted result:', result);
     return result;
